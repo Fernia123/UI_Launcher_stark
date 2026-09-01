@@ -12,7 +12,7 @@ import androidx.appcompat.app.AppCompatActivity
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
- 
+
 class MainActivity : AppCompatActivity() {
 
     private lateinit var timeText: TextView
@@ -61,21 +61,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadApps() {
-        val pm = packageManager
-        val launchIntent = Intent(Intent.ACTION_MAIN, null)
-        launchIntent.addCategory(Intent.CATEGORY_LAUNCHER)
-        val activities = pm.queryIntentActivities(launchIntent, 0)
+        apps.clear()
+        selectedApps.clear()
+        apps.addAll(AppRepository.loadApps(this))
 
-        for (resolveInfo in activities) {
-            val info = AppInfo(
-                resolveInfo.loadLabel(pm).toString(),
-                resolveInfo.activityInfo.packageName,
-                resolveInfo.activityInfo.name
-            )
-            apps.add(info)
+        // Cargar favoritas guardadas
+        val saved = AppRepository.loadFavorites(this)
+        if (saved != null) {
+            selectedApps.addAll(saved)
+        } else if (apps.isNotEmpty()) {
+            selectedApps.addAll(apps.take(4))
         }
-
-        selectedApps.addAll(apps.take(4))
     }
 
     private fun updateTime() {
@@ -94,8 +90,8 @@ class MainActivity : AppCompatActivity() {
                         showRadialMenu(pressX, pressY)
                     }
                 }
-                // Mantener presionado 2.5 segundos para abrir el menú
-                handler.postDelayed(longPressRunnable!!, 2500)
+                // Mantener presionado 0.5 segundos para abrir el menú
+                handler.postDelayed(longPressRunnable!!, 500)
             }
 
             MotionEvent.ACTION_MOVE -> {
@@ -151,6 +147,4 @@ class MainActivity : AppCompatActivity() {
             // Si la app falla al abrirse, simplemente se ignora
         }
     }
-
-    data class AppInfo(val name: String, val packageName: String, val activityName: String)
 }
