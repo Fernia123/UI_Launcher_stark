@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Prubea_01_bloat" parent="Theme.AppCompat.DayNight.NoActionBar" />
+    <style name="Theme.Prubea_01_bloat" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/hud_black</item>
+        <item name="android:statusBarColor">@color/hud_black</item>
+        <item name="android:navigationBarColor">@color/hud_black</item>
+        <item name="android:colorPrimary">@color/hud_cyan</item>
+        <item name="android:colorAccent">@color/hud_cyan</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
 </resources>

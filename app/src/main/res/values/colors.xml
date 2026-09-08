@@ -7,4 +7,17 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Paleta HUD futurista -->
+    <color name="hud_black">#000000</color>
+    <color name="hud_black_soft">#05070D</color>
+    <color name="hud_cyan">#00E5FF</color>
+    <color name="hud_cyan_soft">#7FD9FF</color>
+    <color name="hud_blue">#0091FF</color>
+    <color name="hud_blue_deep">#003A66</color>
+    <color name="hud_white">#EAF7FF</color>
+    <color name="hud_gold">#FFD27A</color>
+    <color name="hud_gold_soft">#FFEdC2</color>
+    <color name="hud_dim">#59EAF7FF</color>
+    <color name="hud_dim2">#33EAF7FF</color>
 </resources>

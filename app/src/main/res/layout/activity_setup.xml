@@ -2,18 +2,34 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0A0A0F">
+    android:background="@color/hud_black">
+
+    <View
+        android:id="@+id/topRule"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_alignParentTop="true"
+        android:layout_marginStart="24dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="24dp"
+        android:background="@color/hud_dim2"/>
 
     <TextView
         android:id="@+id/setupTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentTop="true"
+        android:layout_below="@id/topRule"
         android:layout_centerHorizontal="true"
-        android:layout_marginTop="48dp"
-        android:text="Elige tus apps favoritas"
-        android:textColor="#FFFFFF"
-        android:textSize="24sp"
+        android:layout_marginTop="28dp"
+        android:includeFontPadding="false"
+        android:letterSpacing="0.25"
+        android:shadowColor="@color/hud_cyan"
+        android:shadowDx="0"
+        android:shadowDy="0"
+        android:shadowRadius="12"
+        android:text="CALIBRACIÓN // APPS"
+        android:textColor="@color/hud_white"
+        android:textSize="22sp"
         android:textStyle="bold"/>
 
     <TextView
@@ -23,29 +39,31 @@
         android:layout_below="@id/setupTitle"
         android:layout_centerHorizontal="true"
         android:layout_marginTop="8dp"
-        android:text="Selecciona hasta 8 apps (toca para marcar)"
-        android:textColor="#88FFFFFF"
-        android:textSize="15sp"/>
+        android:letterSpacing="0.08"
+        android:textColor="@color/hud_gold_soft"
+        android:textSize="14sp"
+        android:textStyle="bold"/>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/appGrid"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_above="@id/continueBtn"
-        android:layout_marginTop="16dp"
+        android:layout_below="@id/setupSubtitle"
+        android:layout_marginTop="18dp"
         android:clipToPadding="false"
-        android:padding="12dp"/>
+        android:padding="14dp"/>
 
     <Button
         android:id="@+id/continueBtn"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="54dp"
         android:layout_alignParentBottom="true"
-        android:layout_margin="16dp"
-        android:backgroundTint="#7C5CFF"
-        android:text="Continuar"
-        android:textColor="#FFFFFF"
-        android:textSize="18sp"
+        android:layout_margin="18dp"
+        android:background="@drawable/btn_hud"
+        android:text="INICIAR HUD"
+        android:textColor="@color/hud_white"
+        android:textSize="17sp"
         android:textStyle="bold"/>
 
 </RelativeLayout>

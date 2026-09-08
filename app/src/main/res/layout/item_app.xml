@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_margin="6dp"
-    android:padding="8dp">
+    android:padding="6dp">
 
     <LinearLayout
         android:id="@+id/itemBackground"
@@ -16,8 +16,8 @@
 
         <ImageView
             android:id="@+id/itemIcon"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
             android:contentDescription="@string/app_name"
             android:src="@mipmap/ic_launcher"/>
 
@@ -28,22 +28,24 @@
             android:layout_marginTop="6dp"
             android:ellipsize="end"
             android:gravity="center"
+            android:letterSpacing="0.05"
             android:maxLines="2"
-            android:textColor="#FFFFFF"
-            android:textSize="12sp"/>
+            android:textColor="@color/hud_white"
+            android:textSize="12sp"
+            android:textStyle="bold"/>
 
     </LinearLayout>
 
     <TextView
         android:id="@+id/checkBadge"
-        android:layout_width="28dp"
-        android:layout_height="28dp"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
         android:layout_gravity="top|end"
         android:background="@drawable/check_badge"
         android:gravity="center"
         android:text="✓"
-        android:textColor="#FFFFFF"
-        android:textSize="14sp"
+        android:textColor="@color/hud_white"
+        android:textSize="13sp"
         android:textStyle="bold"
         android:visibility="gone"/>
 
