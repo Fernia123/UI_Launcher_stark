@@ -11,8 +11,21 @@ object AppRepository {
     private const val KEY_FAVORITES = "favorite_packages"
     private const val KEY_SELECTED = "has_selected"
 
+    // OPT: caché temporal de la lista de apps. loadApps() hace queryIntentActivities +
+    // loadLabel/loadIcon por app (costoso); onResume lo llamaba en cada regreso a la
+    // app. Con 5s de TTL, navegaciones rápidas reusan la lista y solo se refresca si
+    // pasó el tiempo (instalación/desinstalación de apps).
+    @Volatile
+    private var appsCache: List<AppInfo>? = null
+    @Volatile
+    private var appsCacheAt = 0L
+    private const val APPS_CACHE_TTL_MS = 5_000L
+
     /** Devuelve todas las aplicaciones lanzables con su icono real. */
     fun loadApps(context: Context): List<AppInfo> {
+        appsCache?.let { cached ->
+            if (System.currentTimeMillis() - appsCacheAt < APPS_CACHE_TTL_MS) return cached
+        }
         val pm = context.packageManager
         val intent = Intent(Intent.ACTION_MAIN, null).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
@@ -29,7 +42,10 @@ object AppRepository {
             .toList()
 
         // Ordenar alfabéticamente
-        return apps.sortedBy { it.name.lowercase() }
+        val sorted = apps.sortedBy { it.name.lowercase() }
+        appsCache = sorted
+        appsCacheAt = System.currentTimeMillis()
+        return sorted
     }
 
     private fun toAppInfo(pm: PackageManager, resolveInfo: ResolveInfo): AppInfo {

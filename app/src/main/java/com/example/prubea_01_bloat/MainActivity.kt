@@ -12,30 +12,44 @@ import android.telephony.TelephonyManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.example.prubea_01_bloat.ui.components.HudHomeScreen
 import com.example.prubea_01_bloat.ui.components.SystemMetrics
 import com.example.prubea_01_bloat.ui.theme.HudTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.io.File
+import kotlinx.coroutines.withContext
+import java.io.BufferedReader
+import java.io.FileReader
+import java.util.Locale
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
 
+    // Estado de métricas: solo se reasigna si algún valor cambió (menos recomposición)
     private var systemMetricsState by mutableStateOf(SystemMetrics())
-    private val favoriteAppsList = mutableListOf<AppInfo>()
+
+    // Listas observables estables: se mutan in-place en lugar de recrearse
+    private val favoriteAppsList = mutableStateListOf<AppInfo>()
+    private val allAppsList = mutableStateListOf<AppInfo>()
 
     private var lastCpuTotal = 0L
     private var lastCpuIdle = 0L
 
+    private companion object {
+        /** 1 GB = 2^30 bytes */
+        const val GB_IN_BYTES = 1024.0 * 1024 * 1024
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        loadFavorites()
+        loadAppLists()
         startMetricsMonitoring()
 
         setContent {
@@ -43,6 +57,7 @@ class MainActivity : ComponentActivity() {
                 HudHomeScreen(
                     metrics = systemMetricsState,
                     favoriteApps = favoriteAppsList,
+                    allApps = allAppsList,
                     onAppSelected = { app ->
                         launchApp(app)
                     }
@@ -53,17 +68,25 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        loadFavorites()
+        loadAppLists()
     }
 
-    private fun loadFavorites() {
-        val allApps = AppRepository.loadApps(this)
-        val saved = AppRepository.loadFavorites(this)
-        favoriteAppsList.clear()
-        if (saved != null && saved.isNotEmpty()) {
-            favoriteAppsList.addAll(saved)
-        } else if (allApps.isNotEmpty()) {
-            favoriteAppsList.addAll(allApps.take(6))
+    private fun loadAppLists() {
+        // Carga de apps fuera del main thread (queryIntentActivities es costoso)
+        lifecycleScope.launch(Dispatchers.Default) {
+            val allApps = AppRepository.loadApps(this@MainActivity)
+            val saved = AppRepository.loadFavorites(this@MainActivity)
+            val favorites = when {
+                saved != null && saved.isNotEmpty() -> saved
+                allApps.isNotEmpty() -> allApps.take(6)
+                else -> emptyList()
+            }
+            withContext(Dispatchers.Main) {
+                allAppsList.clear()
+                allAppsList.addAll(allApps)
+                favoriteAppsList.clear()
+                favoriteAppsList.addAll(favorites)
+            }
         }
     }
 
@@ -84,7 +107,7 @@ class MainActivity : ComponentActivity() {
         val wifiLevel = readWifi()
         val signalLevel = readSignal()
 
-        systemMetricsState = SystemMetrics(
+        val next = SystemMetrics(
             cpuPercent = cpu,
             ramPercent = ramPct,
             ramText = ramStr,
@@ -95,21 +118,33 @@ class MainActivity : ComponentActivity() {
             wifiLevel = wifiLevel,
             signalLevel = signalLevel
         )
+
+        // OPT: no recomponer si nada cambió visible (el texto GB solo cambia a 0.1)
+        if (next != systemMetricsState) {
+            systemMetricsState = next
+        }
     }
 
+    /**
+     * OPT CPU: lee SOLO la primera línea de /proc/stat (BufferedReader en vez de
+     * readLines(), que mapeaba todas las líneas de todos los núcleos a String).
+     */
     private fun readCpu(): Int {
         return try {
-            val lines = File("/proc/stat").readLines()
-            val parts = lines.first().split("\\s+".toRegex()).drop(1).mapNotNull { it.toLongOrNull() }
-            if (parts.size < 4) return systemMetricsState.cpuPercent
-            val idle = parts.getOrElse(3) { 0L } + parts.getOrElse(4) { 0L }
-            val total = parts.sum()
-            val dTotal = total - lastCpuTotal
-            val dIdle = idle - lastCpuIdle
-            lastCpuTotal = total
-            lastCpuIdle = idle
-            if (dTotal <= 0) return systemMetricsState.cpuPercent
-            (100f * (dTotal - dIdle) / dTotal).roundToInt().coerceIn(0, 100)
+            BufferedReader(FileReader("/proc/stat")).use { reader ->
+                val firstLine = reader.readLine() ?: return systemMetricsState.cpuPercent
+                val parts = firstLine.trim().split("\\s+".toRegex()).drop(1)
+                    .mapNotNull { it.toLongOrNull() }
+                if (parts.size < 4) return systemMetricsState.cpuPercent
+                val idle = parts.getOrElse(3) { 0L } + parts.getOrElse(4) { 0L }
+                val total = parts.sum()
+                val dTotal = total - lastCpuTotal
+                val dIdle = idle - lastCpuIdle
+                lastCpuTotal = total
+                lastCpuIdle = idle
+                if (dTotal <= 0) return systemMetricsState.cpuPercent
+                (100f * (dTotal - dIdle) / dTotal).roundToInt().coerceIn(0, 100)
+            }
         } catch (_: Exception) {
             systemMetricsState.cpuPercent
         }
@@ -120,13 +155,14 @@ class MainActivity : ComponentActivity() {
             val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
             val info = ActivityManager.MemoryInfo()
             am.getMemoryInfo(info)
-            val totalKb = info.totalMem / 1024
-            val availKb = info.availMem / 1024
-            val usedPct = ((totalKb - availKb) * 100.0 / totalKb).roundToInt().coerceIn(0, 100)
-            val usedGbStr = "${((totalKb - availKb) / (1024 * 1024))}GB"
-            Pair(usedPct, usedGbStr)
+            val totalBytes = info.totalMem
+            val availBytes = info.availMem
+            val usedPct = ((totalBytes - availBytes) * 100.0 / totalBytes).roundToInt().coerceIn(0, 100)
+            // Mostrar con 1 decimal y convertir de forma correcta bytes -> GB (2^30)
+            val usedGb = (totalBytes - availBytes) / GB_IN_BYTES
+            Pair(usedPct, String.format(Locale.US, "%.1fGB", usedGb))
         } catch (_: Exception) {
-            Pair(0, "0GB")
+            Pair(0, "0.0GB")
         }
     }
 
@@ -136,10 +172,11 @@ class MainActivity : ComponentActivity() {
             val total = stat.totalBytes
             val avail = stat.availableBytes
             val usedPct = ((total - avail) * 100.0 / total).roundToInt().coerceIn(0, 100)
-            val usedGbStr = "${((total - avail) / (1024 * 1024 * 1024))}GB"
-            Pair(usedPct, usedGbStr)
+            // Mostrar con 1 decimal en lugar de truncar los GB enteros
+            val usedGb = (total - avail) / GB_IN_BYTES.toDouble()
+            Pair(usedPct, String.format(Locale.US, "%.1fGB", usedGb))
         } catch (_: Exception) {
-            Pair(0, "0GB")
+            Pair(0, "0.0GB")
         }
     }
 

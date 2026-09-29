@@ -10,13 +10,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -31,18 +26,20 @@ import com.example.prubea_01_bloat.ui.theme.HudCyan
 fun HudHomeScreen(
     metrics: SystemMetrics,
     favoriteApps: List<AppInfo>,
+    allApps: List<AppInfo> = emptyList(),
     onAppSelected: (AppInfo) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var isMenuOpen by remember { mutableStateOf(false) }
-
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(HudBlack)
     ) {
-        // Sci-fi HUD Background grid & animated scanlines
-        HudBackgroundGridCanvas()
+        // Cuadrícula HUD estática + brackets (se dibuja UNA sola vez, no por frame)
+        HudStaticGridCanvas()
+
+        // Scanline animado: capa mínima que solo redibuja 1 línea por frame
+        HudScanlineCanvas()
 
         // Top HUD Header & System Stats
         TopSystemHud(
@@ -50,49 +47,21 @@ fun HudHomeScreen(
             modifier = Modifier.align(Alignment.TopCenter)
         )
 
-        // Radial Menu Overlay
+        // Press-and-hold radial quick-launch menu (bottom of the screen stays free)
         RadialAppMenu(
-            isOpen = isMenuOpen,
             apps = favoriteApps,
-            onAppSelected = { app ->
-                isMenuOpen = false
-                onAppSelected(app)
-            },
-            onDismissRequest = {
-                isMenuOpen = false
-            }
+            allApps = allApps,
+            onAppSelected = onAppSelected
         )
-
-        // Bottom-Right Circular HUD Trigger Core Button
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(bottom = 28.dp, end = 24.dp)
-        ) {
-            HudButton(
-                isOpen = isMenuOpen,
-                onClick = {
-                    isMenuOpen = !isMenuOpen
-                },
-                size = 80.dp
-            )
-        }
     }
 }
 
+/**
+ * Cuadrícula estática: sin animaciones => Compose no la vuelve a dibujar en cada frame.
+ * Antes redibujaba toda la malla + brackets 60 veces por segundo solo por el scanline.
+ */
 @Composable
-private fun HudBackgroundGridCanvas() {
-    val infiniteTransition = rememberInfiniteTransition(label = "hud_scanline")
-    val scanYProgress by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(6000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scan_y"
-    )
-
+private fun HudStaticGridCanvas() {
     Canvas(modifier = Modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
@@ -132,29 +101,44 @@ private fun HudBackgroundGridCanvas() {
         // Four HUD corner brackets
         val arm = 30.dp.toPx()
         val m = 12.dp.toPx()
+        val bracketColor = HudCyan.copy(alpha = 0.4f)
+        val stroke = 1.5.dp.toPx()
 
-        // Top-Left corner
-        drawLine(color = HudCyan.copy(alpha = 0.4f), start = Offset(m, m), end = Offset(m + arm, m), strokeWidth = 1.5.dp.toPx())
-        drawLine(color = HudCyan.copy(alpha = 0.4f), start = Offset(m, m), end = Offset(m, m + arm), strokeWidth = 1.5.dp.toPx())
+        // Top-Left
+        drawLine(bracketColor, Offset(m, m), Offset(m + arm, m), stroke)
+        drawLine(bracketColor, Offset(m, m), Offset(m, m + arm), stroke)
+        // Top-Right
+        drawLine(bracketColor, Offset(w - m, m), Offset(w - m - arm, m), stroke)
+        drawLine(bracketColor, Offset(w - m, m), Offset(w - m, m + arm), stroke)
+        // Bottom-Left
+        drawLine(bracketColor, Offset(m, h - m), Offset(m + arm, h - m), stroke)
+        drawLine(bracketColor, Offset(m, h - m), Offset(m, h - m - arm), stroke)
+        // Bottom-Right
+        drawLine(bracketColor, Offset(w - m, h - m), Offset(w - m - arm, h - m), stroke)
+        drawLine(bracketColor, Offset(w - m, h - m), Offset(w - m, h - m - arm), stroke)
+    }
+}
 
-        // Top-Right corner
-        drawLine(color = HudCyan.copy(alpha = 0.4f), start = Offset(w - m, m), end = Offset(w - m - arm, m), strokeWidth = 1.5.dp.toPx())
-        drawLine(color = HudCyan.copy(alpha = 0.4f), start = Offset(w - m, m), end = Offset(w - m, m + arm), strokeWidth = 1.5.dp.toPx())
+/** Scanline animado aislado: redibuja solo una línea horizontal por frame. */
+@Composable
+private fun HudScanlineCanvas() {
+    val infiniteTransition = rememberInfiniteTransition(label = "hud_scanline")
+    val scanYProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(6000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scan_y"
+    )
 
-        // Bottom-Left corner
-        drawLine(color = HudCyan.copy(alpha = 0.4f), start = Offset(m, h - m), end = Offset(m + arm, h - m), strokeWidth = 1.5.dp.toPx())
-        drawLine(color = HudCyan.copy(alpha = 0.4f), start = Offset(m, h - m), end = Offset(m, h - m - arm), strokeWidth = 1.5.dp.toPx())
-
-        // Bottom-Right corner
-        drawLine(color = HudCyan.copy(alpha = 0.4f), start = Offset(w - m, h - m), end = Offset(w - m - arm, h - m), strokeWidth = 1.5.dp.toPx())
-        drawLine(color = HudCyan.copy(alpha = 0.4f), start = Offset(w - m, h - m), end = Offset(w - m, h - m - arm), strokeWidth = 1.5.dp.toPx())
-
-        // Animated laser scan line
-        val currentScanY = h * 0.1f + (h * 0.8f) * scanYProgress
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val currentScanY = size.height * 0.1f + (size.height * 0.8f) * scanYProgress
         drawLine(
             color = HudCyan.copy(alpha = 0.35f),
             start = Offset(0f, currentScanY),
-            end = Offset(w, currentScanY),
+            end = Offset(size.width, currentScanY),
             strokeWidth = 1.5.dp.toPx()
         )
     }
