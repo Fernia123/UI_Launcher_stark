@@ -1,6 +1,7 @@
 package com.example.prubea_01_bloat.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -67,12 +68,12 @@ fun AppDrawerPanel(
         visible = true,
         enter = slideInHorizontally(
             initialOffsetX = { it },
-            animationSpec = tween(durationMillis = 260)
-        ) + fadeIn(animationSpec = tween(200)),
+            animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing)
+        ) + fadeIn(animationSpec = tween(300)),
         exit = slideOutHorizontally(
             targetOffsetX = { it },
-            animationSpec = tween(durationMillis = 220)
-        ) + fadeOut(animationSpec = tween(160)),
+            animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
+        ) + fadeOut(animationSpec = tween(240)),
         modifier = modifier
     ) {
         Box(

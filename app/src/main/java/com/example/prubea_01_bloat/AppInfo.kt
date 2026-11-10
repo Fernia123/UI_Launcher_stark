@@ -1,10 +1,12 @@
 package com.example.prubea_01_bloat
 
-import android.graphics.drawable.Drawable
-
+/**
+ * Modelo ligero de aplicación.
+ * No almacena la referencia al Drawable para ahorrar megabytes de RAM en memoria heap.
+ */
 data class AppInfo(
     val name: String,
     val packageName: String,
-    val activityName: String,
-    val icon: Drawable?
+    val activityName: String
 )
+

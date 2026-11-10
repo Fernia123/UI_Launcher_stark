@@ -190,7 +190,7 @@ class SystemStatsView @JvmOverloads constructor(
             val availKb = info.availMem / 1024
             val used = ((totalKb - availKb) * 100.0 / totalKb).roundToInt().coerceIn(0, 100)
             ram = used
-            ramText = "${((totalKb - availKb) / (1024 * 1024))}GB"
+            ramText = String.format(java.util.Locale.US, "%.1fGB", (totalKb - availKb) / (1024.0 * 1024.0))
         } catch (_: Exception) {
         }
     }
@@ -201,7 +201,7 @@ class SystemStatsView @JvmOverloads constructor(
             val total = stat.totalBytes
             val avail = stat.availableBytes
             storage = ((total - avail) * 100.0 / total).roundToInt().coerceIn(0, 100)
-            storageText = "${((total - avail) / (1024 * 1024 * 1024))}GB"
+            storageText = String.format(java.util.Locale.US, "%.1fGB", (total - avail) / (1024.0 * 1024.0 * 1024.0))
         } catch (_: Exception) {
         }
     }

@@ -32,7 +32,12 @@ class AppGridAdapter(
 
     override fun onBindViewHolder(holder: AppHolder, position: Int) {
         val app = apps[position]
-        holder.icon.setImageDrawable(app.icon)
+        val bitmap = AppIconLoader.loadIcon(holder.itemView.context, app.packageName)
+        if (bitmap != null) {
+            holder.icon.setImageBitmap(bitmap)
+        } else {
+            holder.icon.setImageDrawable(null)
+        }
         holder.name.text = app.name
         bindState(holder, app.packageName)
         holder.itemView.setOnClickListener {

@@ -41,6 +41,13 @@ class MainActivity : ComponentActivity() {
     private var lastCpuTotal = 0L
     private var lastCpuIdle = 0L
 
+    // Objetos cacheados para evitar asignaciones periódicas en el heap
+    private val memoryInfo = ActivityManager.MemoryInfo()
+    private var activityManagerCache: ActivityManager? = null
+    private var batteryManagerCache: BatteryManager? = null
+    private var wifiManagerCache: WifiManager? = null
+    private var telephonyManagerCache: TelephonyManager? = null
+
     private companion object {
         /** 1 GB = 2^30 bytes */
         const val GB_IN_BYTES = 1024.0 * 1024 * 1024
@@ -48,6 +55,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        activityManagerCache = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        batteryManagerCache = getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+        wifiManagerCache = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+        telephonyManagerCache = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
 
         loadAppLists()
         startMetricsMonitoring()
@@ -71,8 +83,12 @@ class MainActivity : ComponentActivity() {
         loadAppLists()
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        AppIconLoader.clearCache()
+    }
+
     private fun loadAppLists() {
-        // Carga de apps fuera del main thread (queryIntentActivities es costoso)
         lifecycleScope.launch(Dispatchers.Default) {
             val allApps = AppRepository.loadApps(this@MainActivity)
             val saved = AppRepository.loadFavorites(this@MainActivity)
@@ -94,7 +110,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             while (isActive) {
                 readMetrics()
-                delay(2000)
+                delay(2500)
             }
         }
     }
@@ -119,29 +135,46 @@ class MainActivity : ComponentActivity() {
             signalLevel = signalLevel
         )
 
-        // OPT: no recomponer si nada cambió visible (el texto GB solo cambia a 0.1)
         if (next != systemMetricsState) {
             systemMetricsState = next
         }
     }
 
     /**
-     * OPT CPU: lee SOLO la primera línea de /proc/stat (BufferedReader en vez de
-     * readLines(), que mapeaba todas las líneas de todos los núcleos a String).
+     * OPT CPU: Parseo sin asignaciones Regex para consumo ultra bajo de RAM/GC.
      */
     private fun readCpu(): Int {
         return try {
             BufferedReader(FileReader("/proc/stat")).use { reader ->
-                val firstLine = reader.readLine() ?: return systemMetricsState.cpuPercent
-                val parts = firstLine.trim().split("\\s+".toRegex()).drop(1)
-                    .mapNotNull { it.toLongOrNull() }
-                if (parts.size < 4) return systemMetricsState.cpuPercent
-                val idle = parts.getOrElse(3) { 0L } + parts.getOrElse(4) { 0L }
-                val total = parts.sum()
+                val line = reader.readLine() ?: return systemMetricsState.cpuPercent
+                var idx = 4 // Salta "cpu "
+                var user = 0L
+                var nice = 0L
+                var sys = 0L
+                var idle = 0L
+                var iowait = 0L
+
+                fun parseNextLong(): Long {
+                    while (idx < line.length && line[idx] == ' ') idx++
+                    val start = idx
+                    while (idx < line.length && line[idx] in '0'..'9') idx++
+                    return if (start < idx) line.substring(start, idx).toLongOrDefault(0L) else 0L
+                }
+
+                user = parseNextLong()
+                nice = parseNextLong()
+                sys = parseNextLong()
+                idle = parseNextLong()
+                iowait = parseNextLong()
+
+                val total = user + nice + sys + idle + iowait
+                val totalIdle = idle + iowait
+
                 val dTotal = total - lastCpuTotal
-                val dIdle = idle - lastCpuIdle
+                val dIdle = totalIdle - lastCpuIdle
                 lastCpuTotal = total
-                lastCpuIdle = idle
+                lastCpuIdle = totalIdle
+
                 if (dTotal <= 0) return systemMetricsState.cpuPercent
                 (100f * (dTotal - dIdle) / dTotal).roundToInt().coerceIn(0, 100)
             }
@@ -150,15 +183,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun String.toLongOrDefault(def: Long): Long = this.toLongOrNull() ?: def
+
     private fun readRam(): Pair<Int, String> {
         return try {
-            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            val info = ActivityManager.MemoryInfo()
-            am.getMemoryInfo(info)
-            val totalBytes = info.totalMem
-            val availBytes = info.availMem
+            val am = activityManagerCache ?: return Pair(0, "0.0GB")
+            am.getMemoryInfo(memoryInfo)
+            val totalBytes = memoryInfo.totalMem
+            val availBytes = memoryInfo.availMem
             val usedPct = ((totalBytes - availBytes) * 100.0 / totalBytes).roundToInt().coerceIn(0, 100)
-            // Mostrar con 1 decimal y convertir de forma correcta bytes -> GB (2^30)
             val usedGb = (totalBytes - availBytes) / GB_IN_BYTES
             Pair(usedPct, String.format(Locale.US, "%.1fGB", usedGb))
         } catch (_: Exception) {
@@ -172,8 +205,7 @@ class MainActivity : ComponentActivity() {
             val total = stat.totalBytes
             val avail = stat.availableBytes
             val usedPct = ((total - avail) * 100.0 / total).roundToInt().coerceIn(0, 100)
-            // Mostrar con 1 decimal en lugar de truncar los GB enteros
-            val usedGb = (total - avail) / GB_IN_BYTES.toDouble()
+            val usedGb = (total - avail) / GB_IN_BYTES
             Pair(usedPct, String.format(Locale.US, "%.1fGB", usedGb))
         } catch (_: Exception) {
             Pair(0, "0.0GB")
@@ -182,7 +214,7 @@ class MainActivity : ComponentActivity() {
 
     private fun readBattery(): Pair<Int, Boolean> {
         return try {
-            val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            val bm = batteryManagerCache ?: return Pair(100, false)
             val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).coerceIn(0, 100)
             val status = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_STATUS)
             val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
@@ -194,7 +226,7 @@ class MainActivity : ComponentActivity() {
 
     private fun readWifi(): Int {
         return try {
-            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val wm = wifiManagerCache ?: return 0
             if (wm.isWifiEnabled) {
                 val info = wm.connectionInfo
                 if (info != null && info.ssid != null) WifiManager.calculateSignalLevel(info.rssi, 5) else 0
@@ -206,8 +238,10 @@ class MainActivity : ComponentActivity() {
 
     private fun readSignal(): Int {
         return try {
-            val tm = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-            tm.signalStrength?.level ?: 0
+            val tm = telephonyManagerCache ?: return 0
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                tm.signalStrength?.level ?: 0
+            } else 0
         } catch (_: Exception) {
             0
         }

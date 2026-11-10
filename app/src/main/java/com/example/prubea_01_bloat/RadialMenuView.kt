@@ -595,20 +595,15 @@ private class CategoryDef(
                     items[i].category!!.icon, isSel
                 )
             } else {
-                items[i].app?.icon?.let { icon ->
-                    iconRect.set(
-                        (x - ts + pad).toInt(),
-                        (y - ts + pad).toInt(),
-                        (x + ts - pad).toInt(),
-                        (y + ts - pad).toInt()
-                    )
-                    icon.bounds = iconRect
-                    try {
-                        canvas.save()
-                        canvas.clipRect(iconRect)
-                        icon.draw(canvas)
-                        canvas.restore()
-                    } catch (_: Exception) {
+                items[i].app?.let { app ->
+                    AppIconLoader.loadIcon(context, app.packageName)?.let { bitmap ->
+                        iconRect.set(
+                            (x - ts + pad).toInt(),
+                            (y - ts + pad).toInt(),
+                            (x + ts - pad).toInt(),
+                            (y + ts - pad).toInt()
+                        )
+                        canvas.drawBitmap(bitmap, null, iconRect, null)
                     }
                 }
             }

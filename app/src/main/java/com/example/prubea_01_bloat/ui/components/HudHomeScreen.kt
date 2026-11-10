@@ -1,26 +1,26 @@
 package com.example.prubea_01_bloat.ui.components
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.example.prubea_01_bloat.AppInfo
 import com.example.prubea_01_bloat.ui.theme.HudBlack
 import com.example.prubea_01_bloat.ui.theme.HudCyan
+import kotlinx.coroutines.delay
 
 @Composable
 fun HudHomeScreen(
@@ -30,35 +30,52 @@ fun HudHomeScreen(
     onAppSelected: (AppInfo) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var isInteracting by remember { mutableStateOf(false) }
+
+    // Ocultar los detalles LED después de 4.5s de inactividad táctil
+    LaunchedEffect(isInteracting) {
+        if (isInteracting) {
+            delay(4500)
+            isInteracting = false
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(HudBlack)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        isInteracting = true
+                    }
+                )
+            }
     ) {
-        // Cuadrícula HUD estática + brackets (se dibuja UNA sola vez, no por frame)
+        // Cuadrícula HUD estática
         HudStaticGridCanvas()
 
-        // Scanline animado: capa mínima que solo redibuja 1 línea por frame
-        HudScanlineCanvas()
-
-        // Top HUD Header & System Stats
+        // Top HUD Header (Reloj siempre visible; medidores LED solo al interactuar)
         TopSystemHud(
             metrics = metrics,
+            showDetails = isInteracting,
             modifier = Modifier.align(Alignment.TopCenter)
         )
 
-        // Press-and-hold radial quick-launch menu (bottom of the screen stays free)
+        // Menú radial táctil (activa los detalles LED al tocar o presionar)
         RadialAppMenu(
             apps = favoriteApps,
             allApps = allApps,
-            onAppSelected = onAppSelected
+            onAppSelected = onAppSelected,
+            onInteractionChanged = { active ->
+                if (active) isInteracting = true
+            }
         )
     }
 }
 
 /**
- * Cuadrícula estática: sin animaciones => Compose no la vuelve a dibujar en cada frame.
- * Antes redibujaba toda la malla + brackets 60 veces por segundo solo por el scanline.
+ * Cuadrícula estática: sin animaciones distractoras.
  */
 @Composable
 private fun HudStaticGridCanvas() {
@@ -119,27 +136,3 @@ private fun HudStaticGridCanvas() {
     }
 }
 
-/** Scanline animado aislado: redibuja solo una línea horizontal por frame. */
-@Composable
-private fun HudScanlineCanvas() {
-    val infiniteTransition = rememberInfiniteTransition(label = "hud_scanline")
-    val scanYProgress by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(6000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scan_y"
-    )
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val currentScanY = size.height * 0.1f + (size.height * 0.8f) * scanYProgress
-        drawLine(
-            color = HudCyan.copy(alpha = 0.35f),
-            start = Offset(0f, currentScanY),
-            end = Offset(size.width, currentScanY),
-            strokeWidth = 1.5.dp.toPx()
-        )
-    }
-}

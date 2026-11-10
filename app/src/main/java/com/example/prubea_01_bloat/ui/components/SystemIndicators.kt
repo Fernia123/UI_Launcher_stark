@@ -1,5 +1,6 @@
 package com.example.prubea_01_bloat.ui.components
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -118,7 +119,7 @@ private fun GaugeRow(
 ) {
     val animatedPercent by animateFloatAsState(
         targetValue = percent.coerceIn(0, 100).toFloat(),
-        animationSpec = tween(durationMillis = 600),
+        animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
         label = "gauge_anim"
     )
 

@@ -2,15 +2,10 @@ package com.example.prubea_01_bloat.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -58,16 +53,16 @@ private const val RING_GAP_DP = 100
 private const val MAX_OUTER_APPS = 60
 private const val MAX_RINGS = 8
 
-/** ms hasta que el círculo terminó de generarse */
-private const val APPEAR_MS = 650f
+/** ms hasta que el círculo terminó de generarse (animación suave y relajada) */
+private const val APPEAR_MS = 850f
 /** ms de aparición de cada app individual */
-private const val ITEM_POP_MS = 220f
-/** ms entre la aparición de una app y la siguiente */
-private const val STAGGER_MS = 45f
+private const val ITEM_POP_MS = 380f
+/** ms entre la aparición de una app y la siguiente (ola armónica) */
+private const val STAGGER_MS = 65f
 /** ms de transición de fase (favoritas -> todas) */
-private const val PHASE_MS = 420f
+private const val PHASE_MS = 550f
 /** ms entre apariciones dentro de los anillos externos */
-private const val OUTER_STAGGER_MS = 30f
+private const val OUTER_STAGGER_MS = 45f
 
 /**
  * Margen holgado de cercanía al borde: si el dedo está al menos a esta distancia de
@@ -99,7 +94,9 @@ private data class RadialItemPlacement(
     val center: Offset,
     val globalIndex: Int,
     /** true si pertenece al anillo interno de favoritas */
-    val isFavorite: Boolean
+    val isFavorite: Boolean,
+    /** Orden de posición de izquierda a derecha (0 = más a la izquierda) */
+    val orderFromLeft: Int = 0
 )
 
 private data class RadialMenuLayout(val placements: List<RadialItemPlacement>)
@@ -123,6 +120,7 @@ fun RadialAppMenu(
     apps: List<AppInfo>,
     allApps: List<AppInfo>,
     onAppSelected: (AppInfo) -> Unit,
+    onInteractionChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // Only presses that start below this fraction of the screen height open the menu
@@ -153,24 +151,13 @@ fun RadialAppMenu(
     )
     val overlayAlpha by animateFloatAsState(
         targetValue = if (isActive) 1f else 0f,
-        animationSpec = tween(durationMillis = 140),
+        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
         label = "radial_overlay_alpha"
     )
     val phaseProgress by animateFloatAsState(
         targetValue = if (phase == RadialPhase.ALL) 1f else 0f,
         animationSpec = tween(durationMillis = PHASE_MS.toInt(), easing = FastOutSlowInEasing),
         label = "radial_phase"
-    )
-
-    val infiniteTransition = rememberInfiniteTransition(label = "hud_guide_rings")
-    val rotAngle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(12000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "guide_rot"
     )
 
     // ---- Layout (recomputed while the animated radius moves) ------------------
@@ -259,6 +246,7 @@ fun RadialAppMenu(
                     fingerPosition = down.position
                     phase = RadialPhase.FAVORITES
                     isActive = true
+                    onInteractionChanged(true)
 
                     try {
                         while (true) {
@@ -272,9 +260,9 @@ fun RadialAppMenu(
                                 val dy = pointer.position.y - down.position.y
                                 val dx = pointer.position.x - down.position.x
 
-                                // 2a) Jalón hacia la IZQUIERDA -> abrir el cajón lateral
-                                //     con todas las apps almacenadas (2 x 5, scrolleable)
-                                if (dx < -currentSwipeThreshold) {
+                                // 2a) Jalón horizontal (hacia la DERECHA o hacia la IZQUIERDA) -> abrir el cajón lateral
+                                //     con todas las apps almacenadas
+                                if (kotlin.math.abs(dx) > currentSwipeThreshold) {
                                     isActive = false
                                     hoveredIndex = -1
                                     isDrawerOpen = true
@@ -293,15 +281,19 @@ fun RadialAppMenu(
                                 // Highlight the icon currently under the finger
                                 hoveredIndex = radialItemIndexAt(
                                     position = pointer.position,
+                                    finger = fingerPosition,
                                     placements = currentLayout.placements,
-                                    itemHalfPx = itemHalfPx
+                                    itemHalfPx = itemHalfPx,
+                                    baseRadiusPx = baseRadiusPx
                                 )
                             } else {
                                 // Release on top of an icon to launch it
                                 val selectedIndex = radialItemIndexAt(
                                     position = pointer.position,
+                                    finger = fingerPosition,
                                     placements = currentLayout.placements,
-                                    itemHalfPx = itemHalfPx
+                                    itemHalfPx = itemHalfPx,
+                                    baseRadiusPx = baseRadiusPx
                                 )
                                 if (selectedIndex >= 0) {
                                     launchList.getOrNull(selectedIndex)
@@ -361,17 +353,6 @@ fun RadialAppMenu(
                     radius = favRadiusPx * 0.65f,
                     center = center,
                     style = Stroke(width = 1.dp.toPx())
-                )
-
-                // Rotating holographic accent on the favorites ring
-                drawArc(
-                    color = HudCyan.copy(alpha = 0.6f * appear),
-                    startAngle = rotAngle,
-                    sweepAngle = 70f,
-                    useCenter = false,
-                    topLeft = Offset(center.x - favRadiusPx, center.y - favRadiusPx),
-                    size = Size(favRadiusPx * 2f, favRadiusPx * 2f),
-                    style = Stroke(width = 2.dp.toPx())
                 )
 
                 // Outer rings appear with the ALL phase
@@ -483,17 +464,17 @@ fun RadialAppMenu(
     }
 }
 
-/** Pop-in progress (0..1) of one icon, staggered so apps appear sequentially. */
+/** Pop-in progress (0..1) of one icon, appearing from left to right along the circle. */
 private fun appearanceProgressFor(
     placement: RadialItemPlacement,
     appear: Float,
     phaseProgress: Float
 ): Float {
     return if (placement.isFavorite) {
-        val elapsed = appear * APPEAR_MS - placement.globalIndex * STAGGER_MS
+        val elapsed = appear * APPEAR_MS - placement.orderFromLeft * STAGGER_MS
         (elapsed / ITEM_POP_MS).coerceIn(0f, 1f)
     } else {
-        val elapsed = phaseProgress * PHASE_MS - placement.globalIndex * OUTER_STAGGER_MS
+        val elapsed = phaseProgress * PHASE_MS - placement.orderFromLeft * OUTER_STAGGER_MS
         (elapsed / ITEM_POP_MS).coerceIn(0f, 1f)
     }
 }
@@ -538,29 +519,45 @@ private fun buildRadialMenuLayout(
 ): RadialMenuLayout {
     if (itemCount <= 0) return RadialMenuLayout(emptyList())
 
-    val blocked = if (isNearScreenEdge(press, EDGE_PROXIMITY_MARGIN_DP)) {
-        // Cerca del borde real: recorta el círculo al arco donde los íconos caben
-        edgeBlockedSectors(press, radiusPx, itemHalfPx, edgeMarginPx)
-    } else {
-        // Lejos del borde: círculo completo aunque el anillo roce el límite
-        emptyList()
-    }
-    val allowed = widestAllowedArc(blocked, directionToScreenCenter(press))
+    val placements = mutableListOf<RadialItemPlacement>()
+    val maxPerRing = 7
+    var assigned = 0
+    var ring = 0
 
-    // Sin deformación: los íconos SIEMPRE quedan sobre la circunferencia alrededor de
-    // la huella. Si el arco visible es muy pequeño (esquina extrema) los íconos se
-    // reparten por ese rango del círculo aunque queden más juntos, pero nunca se
-    // recortan por los bordes ni se desplazan del rango del círculo visible.
-    val angles = distributeAngles(allowed, itemCount, fullCircleStart = -PI / 2.0)
-    val centers = angles.map { angle ->
-        Offset(
-            press.finger.x + (radiusPx * cos(angle)).toFloat(),
-            press.finger.y + (radiusPx * sin(angle)).toFloat()
-        )
+    while (assigned < itemCount && ring < 3) {
+        val currentRadius = radiusPx * (1f + ring * 0.42f)
+        val take = minOf(maxPerRing + ring * 3, itemCount - assigned)
+
+        val blocked = if (isNearScreenEdge(press, EDGE_PROXIMITY_MARGIN_DP)) {
+            edgeBlockedSectors(press, currentRadius, itemHalfPx, edgeMarginPx)
+        } else {
+            emptyList()
+        }
+        val allowed = widestAllowedArc(blocked, directionToScreenCenter(press))
+        val angles = distributeAngles(allowed, take, fullCircleStart = -PI / 2.0)
+
+        val ringCenters = angles.map { angle ->
+            Offset(
+                press.finger.x + (currentRadius * cos(angle)).toFloat(),
+                press.finger.y + (currentRadius * sin(angle)).toFloat()
+            )
+        }
+
+        ringCenters.forEachIndexed { i, center ->
+            placements.add(RadialItemPlacement(center, firstGlobalIndex + assigned + i, isFavorite))
+        }
+
+        assigned += take
+        ring++
     }
+
+    // Ordenar de izquierda a derecha por posición X del centro
+    val sortedByX = placements.sortedBy { it.center.x }
+    val orderMap = sortedByX.withIndex().associate { (idx, item) -> item.globalIndex to idx }
+
     return RadialMenuLayout(
-        centers.mapIndexed { i, center ->
-            RadialItemPlacement(center, firstGlobalIndex + i, isFavorite)
+        placements.map { placement ->
+            placement.copy(orderFromLeft = orderMap[placement.globalIndex] ?: 0)
         }
     )
 }
@@ -589,6 +586,7 @@ private fun buildOuterRingsLayout(
         val radius = baseRadiusPx + ringGapPx * ring
         if (radius > maxOf(press.screenWidthPx, press.screenHeightPx)) break
 
+        val maxCap = 7 + ring * 4
         val blocked = if (isNearScreenEdge(press, EDGE_PROXIMITY_MARGIN_DP)) {
             edgeBlockedSectors(press, radius, itemHalfPx, edgeMarginPx)
         } else {
@@ -596,24 +594,29 @@ private fun buildOuterRingsLayout(
         }
         val allowed = widestAllowedArc(blocked, directionToScreenCenter(press))
         val slot = 2.0 * asin((itemHalfPx * 1.25f / radius).coerceIn(0f, 1f).toDouble())
-        val capacity = maxOf(1, floor(allowed.span / slot).toInt())
+        val calcCap = maxOf(1, floor(allowed.span / slot).toInt())
+        val capacity = minOf(maxCap, calcCap)
 
         val take = minOf(capacity, apps.size - assigned)
         val angles = distributeAngles(allowed, take, fullCircleStart = -PI / 2.0)
 
-        angles.forEach { angle ->
-            placements.add(
-                RadialItemPlacement(
-                    center = Offset(
-                        press.finger.x + (radius * cos(angle)).toFloat(),
-                        press.finger.y + (radius * sin(angle)).toFloat()
-                    ),
-                    globalIndex = firstGlobalIndex + assigned,
-                    isFavorite = false
-                )
+        val ringPlacements = angles.mapIndexed { idx, angle ->
+            RadialItemPlacement(
+                center = Offset(
+                    press.finger.x + (radius * cos(angle)).toFloat(),
+                    press.finger.y + (radius * sin(angle)).toFloat()
+                ),
+                globalIndex = firstGlobalIndex + assigned + idx,
+                isFavorite = false
             )
-            assigned++
         }
+        val sortedRing = ringPlacements.sortedBy { it.center.x }
+        val ringOrderMap = sortedRing.withIndex().associate { (idx, item) -> item.globalIndex to idx }
+
+        ringPlacements.forEach { placement ->
+            placements.add(placement.copy(orderFromLeft = ringOrderMap[placement.globalIndex] ?: 0))
+        }
+        assigned += take
         ring++
     }
     return placements
@@ -744,21 +747,51 @@ private fun directionToScreenCenter(press: PressLocation): Double =
         (press.screenWidthPx / 2f - press.finger.x).toDouble()
     )
 
-/** Nearest icon placement under the given position, or -1 when none is close enough. */
+/**
+ * Selección fluida y precisa de ícono bajo la posición del dedo.
+ * Combina la proximidad angular y la distancia desde la huella central.
+ */
 private fun radialItemIndexAt(
     position: Offset,
+    finger: Offset,
     placements: List<RadialItemPlacement>,
-    itemHalfPx: Float
+    itemHalfPx: Float,
+    baseRadiusPx: Float
 ): Int {
-    val hitRadius = itemHalfPx * 1.4f
+    if (placements.isEmpty()) return -1
+
+    val dxCenter = position.x - finger.x
+    val dyCenter = position.y - finger.y
+    val distFromCenter = kotlin.math.hypot(dxCenter, dyCenter)
+
+    // Si el dedo está demasiado cerca del centro de la huella (< 25% del radio), permite cancelar sin seleccionar nada
+    if (distFromCenter < baseRadiusPx * 0.25f) {
+        return -1
+    }
+
     var bestIndex = -1
-    var bestDistance = hitRadius * hitRadius
+    var minScore = Float.MAX_VALUE
+    val fingerAngle = (atan2(dyCenter, dxCenter) + 2 * PI).toFloat() % (2 * PI).toFloat()
+
     placements.forEach { placement ->
-        val dx = position.x - placement.center.x
-        val dy = position.y - placement.center.y
-        val distanceSquared = dx * dx + dy * dy
-        if (distanceSquared <= bestDistance) {
-            bestDistance = distanceSquared
+        val dx = placement.center.x - finger.x
+        val dy = placement.center.y - finger.y
+        val itemAngle = (atan2(dy, dx) + 2 * PI).toFloat() % (2 * PI).toFloat()
+
+        var angleDiff = kotlin.math.abs(fingerAngle - itemAngle)
+        if (angleDiff > PI.toFloat()) {
+            angleDiff = (2 * PI).toFloat() - angleDiff
+        }
+
+        val itemDx = position.x - placement.center.x
+        val itemDy = position.y - placement.center.y
+        val distToItemSq = itemDx * itemDx + itemDy * itemDy
+
+        val maxDistSq = (itemHalfPx * 2.6f) * (itemHalfPx * 2.6f)
+        val score = distToItemSq + angleDiff * 6000f
+
+        if (distToItemSq <= maxDistSq && score < minScore) {
+            minScore = score
             bestIndex = placement.globalIndex
         }
     }

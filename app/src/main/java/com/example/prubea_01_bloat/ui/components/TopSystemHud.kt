@@ -1,11 +1,14 @@
 package com.example.prubea_01_bloat.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -54,6 +57,7 @@ import kotlin.math.sin
 @Composable
 fun TopSystemHud(
     metrics: SystemMetrics,
+    showDetails: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var currentTime by remember { mutableStateOf("") }
@@ -73,55 +77,62 @@ fun TopSystemHud(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 12.dp, start = 16.dp, end = 16.dp)
+            .padding(top = 16.dp, start = 16.dp, end = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Top row: Title tag + Status Indicators (Battery, WiFi, Signal)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        // Top row: Title tag + Status Indicators (Battery, WiFi, Signal) - Visible on interaction
+        AnimatedVisibility(
+            visible = showDetails,
+            enter = fadeIn(tween(350)),
+            exit = fadeOut(tween(400))
         ) {
-            Text(
-                text = "LAB // HUD CONTROL",
-                color = HudWhiteDim,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 2.sp
-            )
-
-            // Top-Right status pill
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0x1400E5FF))
-                    .border(1.dp, Color(0x3700E5FF), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Text(
+                    text = "LAB // HUD CONTROL",
+                    color = HudWhiteDim,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 2.sp
+                )
+
+                // Top-Right status pill
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0x1400E5FF))
+                        .border(1.dp, Color(0x3700E5FF), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    Text(
-                        text = "${metrics.batteryPercent}%",
-                        color = if (metrics.batteryPercent > 20) HudCyan else HudGold,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Text(
-                        text = "WIFI:${metrics.wifiLevel}",
-                        color = HudWhiteDim,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "${metrics.batteryPercent}%",
+                            color = if (metrics.batteryPercent > 20) HudCyan else HudGold,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = "WIFI:${metrics.wifiLevel}",
+                            color = HudWhiteDim,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Center Time & Date
+        // Center Time & Date (Always visible)
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth()
@@ -129,7 +140,7 @@ fun TopSystemHud(
             Text(
                 text = currentTime.ifEmpty { "00:00" },
                 color = HudWhite,
-                fontSize = 50.sp,
+                fontSize = 58.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.SansSerif,
                 letterSpacing = 1.sp
@@ -146,14 +157,20 @@ fun TopSystemHud(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // System Gauges + Weather mini widget row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
+        // System Gauges + Weather mini widget row - Visible on interaction
+        AnimatedVisibility(
+            visible = showDetails,
+            enter = fadeIn(tween(350)),
+            exit = fadeOut(tween(400))
         ) {
-            SystemIndicators(metrics = metrics)
-            WeatherIndicatorCard()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                SystemIndicators(metrics = metrics)
+                WeatherIndicatorCard()
+            }
         }
     }
 }
@@ -169,11 +186,13 @@ fun WeatherIndicatorCard(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(6000, easing = LinearEasing),
+            animation = tween(12000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "sun_ray_rot"
     )
+
+    val cloudPath = remember { Path() }
 
     Box(
         modifier = modifier
@@ -221,11 +240,10 @@ fun WeatherIndicatorCard(
                     )
                 }
 
-                // Cloud cover
-                val cloudPath = Path().apply {
-                    addOval(Rect(cx - 14.dp.toPx(), cy, cx + 2.dp.toPx(), cy + 10.dp.toPx()))
-                    addOval(Rect(cx - 6.dp.toPx(), cy - 4.dp.toPx(), cx + 10.dp.toPx(), cy + 10.dp.toPx()))
-                }
+                // Cloud cover (reusable path)
+                cloudPath.reset()
+                cloudPath.addOval(Rect(cx - 14.dp.toPx(), cy, cx + 2.dp.toPx(), cy + 10.dp.toPx()))
+                cloudPath.addOval(Rect(cx - 6.dp.toPx(), cy - 4.dp.toPx(), cx + 10.dp.toPx(), cy + 10.dp.toPx()))
                 drawPath(path = cloudPath, color = HudWhite.copy(alpha = 0.65f))
             }
 
